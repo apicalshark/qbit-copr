@@ -6,7 +6,7 @@ Release: 2%{?dist}
 License: GPL-2.0-or-later
 URL:     https://github.com/c0re100/qBittorrent-Enhanced-Edition
 
-Source0: https://github.com/c0re100/%{name}/archive/refs/tags/release-%{version}.tar.gz
+Source0: %{url}/archive/refs/tags/release-%{version}.tar.gz
 
 
 ExcludeArch:   %{ix86}
@@ -47,7 +47,7 @@ A Headless Bittorrent client using rb_libtorrent.
 It aims to be as fast as possible and to provide multi-OS, unicode support.
 
 %prep
-%setup -q -n qBittorrent-Enhanced-Edition-%{version}
+%autosetup -n qBittorrent-Enhanced-Edition-release-%{version}
 
 %build
 mkdir build-nox
