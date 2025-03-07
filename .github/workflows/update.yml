@@ -43,6 +43,12 @@ jobs:
           echo "Remote Version: $REMOTE_VERSION"
           echo "Local Version: $LOCAL_VERSION"
 
+          # Install devscripts package which includes version-compare
+          if ! dpkg -s devscripts &> /dev/null; then
+              sudo apt-get update
+              sudo apt-get install -y devscripts
+          fi
+          
           if version-compare "$REMOTE_VERSION" "$LOCAL_VERSION"
           then
             echo "Remote version is newer. Updating spec file..."
