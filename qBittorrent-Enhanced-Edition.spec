@@ -8,8 +8,7 @@ License: GPL-2.0-or-later
 URL:     https://github.com/c0re100/qBittorrent-Enhanced-Edition
 
 Source0: https://github.com/c0re100/%{name}/archive/refs/tags/release-%{version}.tar.gz
-#Source1: https://downloads.sourceforge.net/%{name}/%{name}-%{version}.tar.xz.asc
-#Source2: https://github.com/qbittorrent/qBittorrent/raw/master/5B7CC9A2.asc
+
 
 ExcludeArch:   %{ix86}
 
@@ -49,7 +48,6 @@ A Headless Bittorrent client using rb_libtorrent.
 It aims to be as fast as possible and to provide multi-OS, unicode support.
 
 %prep
-# %{gpgverify} --keyring='%{SOURCE2}' --signature='%{SOURCE1}' --data='%{SOURCE0}'
 %autosetup
 
 %build
