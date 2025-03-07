@@ -3,6 +3,7 @@ name: Update Spec Version
 on:
   schedule:
     - cron: '0 0 1 * *' # Runs at 00:00 on the first day of every month
+  workflow_dispatch:
 
 jobs:
   check_and_update:
