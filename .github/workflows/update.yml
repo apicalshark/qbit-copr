@@ -3,7 +3,7 @@ name: Update Spec Version
 on:
   schedule:
     - cron: '0 0 1 * *' # Runs at 00:00 on the first day of every month
-  workflow_dispatch:
+  workflow_dispatch: # Allow manual triggering
 
 jobs:
   check_and_update:
@@ -33,7 +33,7 @@ jobs:
           echo "LOCAL_VERSION=$LOCAL_VERSION" >> $GITHUB_ENV
           echo "local_version=$LOCAL_VERSION" >> $GITHUB_OUTPUT
 
-      - name: Compare versions and update spec file
+      - name: Compare versions and update spec file (Bash)
         if: steps.get_remote_tag.outputs.remote_version != '' && steps.get_local_version.outputs.local_version != ''
         id: compare_versions_and_update_spec_file
         run: |
@@ -43,14 +43,31 @@ jobs:
           echo "Remote Version: $REMOTE_VERSION"
           echo "Local Version: $LOCAL_VERSION"
 
-          # Install devscripts package which includes version-compare
-          if ! dpkg -s devscripts &> /dev/null; then
-              sudo apt-get update
-              sudo apt-get install -y devscripts
-          fi
-          
-          if version-compare "$REMOTE_VERSION" "$LOCAL_VERSION"
-          then
+          # Bash version comparison logic
+          is_newer=false
+
+          IFS='.' read -r -a remote_parts <<< "$REMOTE_VERSION"
+          IFS='.' read -r -a local_parts <<< "$LOCAL_VERSION"
+
+          remote_len=${#remote_parts[@]}
+          local_len=${#local_parts[@]}
+          max_len=$((remote_len > local_len ? remote_len : local_len))
+
+          for ((i=0; i<max_len; i++)); do
+            remote_part="${remote_parts[i]:-0}" # Default to 0 if part doesn't exist
+            local_part="${local_parts[i]:-0}"
+
+            if [[ "$remote_part" -gt "$local_part" ]]; then
+              is_newer=true
+              break # Remote is newer
+            elif [[ "$remote_part" -lt "$local_part" ]]; then
+              is_newer=false
+              break # Local is newer or equal in this component, and smaller overall
+            fi
+            # If parts are equal, continue to next part
+          done
+
+          if "$is_newer"; then
             echo "Remote version is newer. Updating spec file..."
             sed -i "s/^Version: *${LOCAL_VERSION}$/Version: ${REMOTE_VERSION}/" qBittorrent-Enhanced-Edition.spec
             echo "updated_spec=true" >> $GITHUB_OUTPUT
