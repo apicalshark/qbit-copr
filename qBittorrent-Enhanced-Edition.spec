@@ -2,7 +2,7 @@ Name:    qBittorrent-Enhanced-Edition
 Summary: qBittorrent Enhanced, based on qBittorrent 
 Epoch:   1
 Version: 5.0.4.10
-Release: 1%{?dist}
+Release: 2%{?dist}
 License: GPL-2.0-or-later
 URL:     https://github.com/c0re100/qBittorrent-Enhanced-Edition
 
@@ -47,7 +47,7 @@ A Headless Bittorrent client using rb_libtorrent.
 It aims to be as fast as possible and to provide multi-OS, unicode support.
 
 %prep
-%autosetup
+%setup -q -n qBittorrent-Enhanced-Edition-%{version}
 
 %build
 mkdir build-nox
