@@ -1,0 +1,80 @@
+name: Update Spec Version
+
+on:
+  schedule:
+    - cron: '0 0 1 * *' # Runs at 00:00 on the first day of every month
+
+jobs:
+  check_and_update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout local repository
+        uses: actions/checkout@v3
+
+      - name: Get latest release tag from GitHub
+        id: get_remote_tag
+        run: |
+          LATEST_TAG=$(curl -s "https://api.github.com/repos/c0re100/qBittorrent-Enhanced-Edition/releases/latest" | jq -r '.tag_name')
+          echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
+          if [[ -z "$LATEST_TAG" ]]; then
+            echo "::warning::Could not fetch latest tag from GitHub API. Please check API rate limits or repository availability."
+            exit 1
+          fi
+          REMOTE_VERSION=$(echo "$LATEST_TAG" | sed 's/^release-//')
+          echo "REMOTE_VERSION=$REMOTE_VERSION" >> $GITHUB_ENV
+          echo "remote_version=$REMOTE_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Get local spec version
+        id: get_local_version
+        run: |
+          LOCAL_VERSION=$(awk -F ': ' '/^Version:/ {print $2}' qBittorrent-Enhanced-Edition.spec)
+          echo "LOCAL_VERSION=$LOCAL_VERSION" >> $GITHUB_ENV
+          echo "local_version=$LOCAL_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Compare versions and update spec file
+        if: steps.get_remote_tag.outputs.remote_version != '' && steps.get_local_version.outputs.local_version != ''
+        id: compare_versions_and_update_spec_file
+        run: |
+          REMOTE_VERSION="${{ env.REMOTE_VERSION }}"
+          LOCAL_VERSION="${{ env.LOCAL_VERSION }}"
+
+          echo "Remote Version: $REMOTE_VERSION"
+          echo "Local Version: $LOCAL_VERSION"
+
+          # Install version-compare if not available (e.g., on some minimal ubuntu images)
+          if ! command -v version-compare &> /dev/null
+          then
+              sudo apt-get update
+              sudo apt-get install -y version-compare
+          fi
+
+          if version-compare "$REMOTE_VERSION" "$LOCAL_VERSION"
+          then
+            echo "Remote version is newer. Updating spec file..."
+            sed -i "s/^Version: *${LOCAL_VERSION}$/Version: ${REMOTE_VERSION}/" qBittorrent-Enhanced-Edition.spec
+            echo "updated_spec=true" >> $GITHUB_OUTPUT
+          else
+            echo "Local version is up-to-date or newer. No update needed."
+            echo "updated_spec=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Configure Git if spec file updated
+        if: steps.compare_versions_and_update_spec_file.outputs.updated_spec == 'true'
+        run: |
+          git config --local user.email "actions@github.com"
+          git config --local user.name "GitHub Actions"
+
+      - name: Commit changes if spec file updated
+        if: steps.compare_versions_and_update_spec_file.outputs.updated_spec == 'true'
+        id: commit_changes_if_spec_file_updated
+        run: |
+          git add qBittorrent-Enhanced-Edition.spec
+          git commit -m "chore: Update qBittorrent-Enhanced-Edition.spec to version ${{ env.REMOTE_VERSION }}"
+          echo "committed=true" >> $GITHUB_OUTPUT
+        continue-on-error: true # In case there is no change to commit
+
+      - name: Push changes if commit was made
+        if: steps.compare_versions_and_update_spec_file.outputs.updated_spec == 'true' && steps.commit_changes_if_spec_file_updated.outputs.committed == 'true'
+        run: |
+          git push origin HEAD:main # or your main branch name
