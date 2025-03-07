@@ -3,7 +3,6 @@ Summary: qBittorrent Enhanced, based on qBittorrent
 Epoch:   1
 Version: 5.0.4.10
 Release: 1%{?dist}
-# Automatically converted from old format: GPLv2+ - review is highly recommended.
 License: GPL-2.0-or-later
 URL:     https://github.com/c0re100/qBittorrent-Enhanced-Edition
 
