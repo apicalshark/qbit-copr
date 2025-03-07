@@ -43,13 +43,6 @@ jobs:
           echo "Remote Version: $REMOTE_VERSION"
           echo "Local Version: $LOCAL_VERSION"
 
-          # Install version-compare if not available (e.g., on some minimal ubuntu images)
-          if ! command -v version-compare &> /dev/null
-          then
-              sudo apt-get update
-              sudo apt-get install -y version-compare
-          fi
-
           if version-compare "$REMOTE_VERSION" "$LOCAL_VERSION"
           then
             echo "Remote version is newer. Updating spec file..."
