@@ -10,6 +10,8 @@ Source0: %{url}/archive/refs/tags/release-%{version}.tar.gz
 
 
 ExcludeArch:   %{ix86}
+Conflicts:     qbittorrent
+Conflicts:     qbittorrent-nox
 
 BuildRequires: cmake
 BuildRequires: gcc-c++
