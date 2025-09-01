@@ -5,9 +5,17 @@ on:
     - cron: '0 0 * * 1'  # Runs every Monday at midnight UTC
   workflow_dispatch: # Allow manual triggering
 
+permissions:
+  contents: write
+  packages: write
+
 jobs:
   check_and_update:
     runs-on: ubuntu-latest
+    env:
+      TARGET_REPO: "c0re100/qBittorrent-Enhanced-Edition"
+      SPEC_FILE: "qBittorrent-Enhanced-Edition.spec"
+      TAG_PREFIX: "release-"
 
     steps:
       - name: Checkout local repository
@@ -16,82 +24,65 @@ jobs:
       - name: Get latest release tag from GitHub
         id: get_remote_tag
         run: |
-          LATEST_TAG=$(curl -s "https://api.github.com/repos/c0re100/qBittorrent-Enhanced-Edition/releases/latest" | jq -r '.tag_name')
-          echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
-          if [[ -z "$LATEST_TAG" ]]; then
-            echo "::warning::Could not fetch latest tag from GitHub API. Please check API rate limits or repository availability."
+          LATEST_TAG=$(curl -s "https://api.github.com/repos/${{ env.TARGET_REPO }}/releases/latest" | jq -r '.tag_name')
+          
+          # --- IMPROVEMENT: More robust check for a valid tag ---
+          if [[ -z "$LATEST_TAG" || "$LATEST_TAG" == "null" ]]; then
+            echo "::error::Could not fetch a valid latest tag from GitHub API for ${{ env.TARGET_REPO }}. Got: '$LATEST_TAG'"
             exit 1
           fi
-          REMOTE_VERSION=$(echo "$LATEST_TAG" | sed 's/^release-//')
+
+          echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
+
+          TAG_PREFIX="${{ env.TAG_PREFIX }}"
+          if [[ -n "$TAG_PREFIX" ]]; then
+            REMOTE_VERSION="${LATEST_TAG#"$TAG_PREFIX"}"
+            echo "Removed prefix '${TAG_PREFIX}'. Full tag: ${LATEST_TAG}, Version: ${REMOTE_VERSION}"
+          else
+            REMOTE_VERSION="$LATEST_TAG"
+            echo "No prefix to remove. Full tag: ${LATEST_TAG}, Version: ${REMOTE_VERSION}"
+          fi
+          
           echo "REMOTE_VERSION=$REMOTE_VERSION" >> $GITHUB_ENV
           echo "remote_version=$REMOTE_VERSION" >> $GITHUB_OUTPUT
 
       - name: Get local spec version
         id: get_local_version
         run: |
-          LOCAL_VERSION=$(awk -F ': ' '/^Version:/ {print $2}' qBittorrent-Enhanced-Edition.spec)
+          LOCAL_VERSION=$(awk -F ': ' '/^Version:/ {print $2}' ${{ env.SPEC_FILE }})
+
+          # --- IMPROVEMENT: Validate the local version format ---
+          if ! [[ "$LOCAL_VERSION" =~ ^[0-9] ]]; then
+            echo "::error::Invalid local version found in ${{ env.SPEC_FILE }}: '$LOCAL_VERSION'. Version must start with a digit."
+            exit 1
+          fi
+
           echo "LOCAL_VERSION=$LOCAL_VERSION" >> $GITHUB_ENV
           echo "local_version=$LOCAL_VERSION" >> $GITHUB_OUTPUT
 
-      - name: Compare versions and update spec file (Bash)
-        if: steps.get_remote_tag.outputs.remote_version != '' && steps.get_local_version.outputs.local_version != ''
-        id: compare_versions_and_update_spec_file
+      - name: Compare versions and update spec file
+        id: compare_versions
         run: |
-          REMOTE_VERSION="${{ env.REMOTE_VERSION }}"
-          LOCAL_VERSION="${{ env.LOCAL_VERSION }}"
+          REMOTE_VERSION="${{ steps.get_remote_tag.outputs.remote_version }}"
+          LOCAL_VERSION="${{ steps.get_local_version.outputs.local_version }}"
 
-          echo "Remote Version: $REMOTE_VERSION"
-          echo "Local Version: $LOCAL_VERSION"
+          echo "Remote Version ($REMOTE_VERSION) vs. Local Version ($LOCAL_VERSION)"
 
-          # Bash version comparison logic
-          is_newer=false
-
-          IFS='.' read -r -a remote_parts <<< "$REMOTE_VERSION"
-          IFS='.' read -r -a local_parts <<< "$LOCAL_VERSION"
-
-          remote_len=${#remote_parts[@]}
-          local_len=${#local_parts[@]}
-          max_len=$((remote_len > local_len ? remote_len : local_len))
-
-          for ((i=0; i<max_len; i++)); do
-            remote_part="${remote_parts[i]:-0}" # Default to 0 if part doesn't exist
-            local_part="${local_parts[i]:-0}"
-
-            if [[ "$remote_part" -gt "$local_part" ]]; then
-              is_newer=true
-              break # Remote is newer
-            elif [[ "$remote_part" -lt "$local_part" ]]; then
-              is_newer=false
-              break # Local is newer or equal in this component, and smaller overall
-            fi
-            # If parts are equal, continue to next part
-          done
-
-          if "$is_newer"; then
+          if dpkg --compare-versions "$REMOTE_VERSION" "gt" "$LOCAL_VERSION"; then
             echo "Remote version is newer. Updating spec file..."
-            sed -i "s/^Version: *${LOCAL_VERSION}$/Version: ${REMOTE_VERSION}/" qBittorrent-Enhanced-Edition.spec
+            sed -i "s/^Version: *${LOCAL_VERSION}$/Version: ${REMOTE_VERSION}/" ${{ env.SPEC_FILE }}
             echo "updated_spec=true" >> $GITHUB_OUTPUT
           else
             echo "Local version is up-to-date or newer. No update needed."
             echo "updated_spec=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Configure Git if spec file updated
-        if: steps.compare_versions_and_update_spec_file.outputs.updated_spec == 'true'
+      - name: Commit and Push Changes
+        if: steps.compare_versions.outputs.updated_spec == 'true'
         run: |
-          git config --local user.email "actions@github.com"
-          git config --local user.name "GitHub Actions"
-
-      - name: Commit changes if spec file updated
-        if: steps.compare_versions_and_update_spec_file.outputs.updated_spec == 'true'
-        id: commit_changes_if_spec_file_updated
-        run: |
-          git add qBittorrent-Enhanced-Edition.spec
-          git commit -m "chore: Update qBittorrent-Enhanced-Edition.spec to version ${{ env.REMOTE_VERSION }}"
-          echo "committed=true" >> $GITHUB_OUTPUT
-        continue-on-error: true # In case there is no change to commit
-
-      - name: Push changes if commit was made
-        if: steps.compare_versions_and_update_spec_file.outputs.updated_spec == 'true' && steps.commit_changes_if_spec_file_updated.outputs.committed == 'true'
-        run: |
-          git push origin HEAD:main # or your main branch name
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          git add ${{ env.SPEC_FILE }}
+          git commit -m "chore: Update ${{ env.SPEC_FILE }} to version ${{ env.REMOTE_VERSION }}"
+          git push
