@@ -2,8 +2,8 @@ name: Update Spec Version
 
 on:
   schedule:
-    - cron: '0 0 * * 1'  # Runs every Monday at midnight UTC
-  workflow_dispatch: # Allow manual triggering
+    - cron: '0 0 * * 1'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -13,8 +13,12 @@ jobs:
   check_and_update:
     runs-on: ubuntu-latest
     env:
+      # --- CONFIGURATION: Set these for your target repository ---
+      # The repository to check for new releases (e.g., "linuxmint/webapp-manager")
       TARGET_REPO: "c0re100/qBittorrent-Enhanced-Edition"
-      SPEC_FILE: "qBittorrent-Enhanced-Edition.spec"
+      # The path to your RPM spec file.
+      SPEC_FILE: "qBittorrent-Enhanced-Edition.specc"
+      # Optional prefix to remove from the git tag (e.g., "v" for tags like "v1.2.3").
       TAG_PREFIX: "release-"
 
     steps:
@@ -24,23 +28,35 @@ jobs:
       - name: Get latest release tag from GitHub
         id: get_remote_tag
         run: |
-          LATEST_TAG=$(curl -s "https://api.github.com/repos/${{ env.TARGET_REPO }}/releases/latest" | jq -r '.tag_name')
-          
-          # --- IMPROVEMENT: More robust check for a valid tag ---
-          if [[ -z "$LATEST_TAG" || "$LATEST_TAG" == "null" ]]; then
-            echo "::error::Could not fetch a valid latest tag from GitHub API for ${{ env.TARGET_REPO }}. Got: '$LATEST_TAG'"
+          echo "Fetching all tags from ${{ env.TARGET_REPO }}..."
+          LATEST_TAG=$( \
+            # 1. Fetch all tags from the correct API endpoint
+            curl -s "https://api.github.com/repos/${{ env.TARGET_REPO }}/tags" | \
+            # 2. Extract just the tag name from each object
+            jq -r '.[].name' | \
+            # 3. Filter for tags that look like version numbers
+            grep -E '^[0-9]+(\.[0-9]+)*$' | \
+            # 4. IMPORTANT: Sort the results using version logic (e.g., 1.10 > 1.9)
+            sort -V | \
+            # 5. Take the last line, which is now the highest version
+            tail -n 1 \
+          )
+
+          # Validate that a tag was found
+          if [[ -z "$LATEST_TAG" ]]; then
+            echo "::error::Could not find a valid numerical tag for ${{ env.TARGET_REPO }} using the /tags endpoint."
             exit 1
           fi
+          echo "Latest valid tag found: $LATEST_TAG"
 
-          echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
-
+          # Remove prefix from tag to get the clean version number
+          REMOTE_VERSION="$LATEST_TAG"
           TAG_PREFIX="${{ env.TAG_PREFIX }}"
-          if [[ -n "$TAG_PREFIX" ]]; then
+          if [[ -n "$TAG_PREFIX" && "$LATEST_TAG" == "$TAG_PREFIX"* ]]; then
             REMOTE_VERSION="${LATEST_TAG#"$TAG_PREFIX"}"
             echo "Removed prefix '${TAG_PREFIX}'. Full tag: ${LATEST_TAG}, Version: ${REMOTE_VERSION}"
           else
-            REMOTE_VERSION="$LATEST_TAG"
-            echo "No prefix to remove. Full tag: ${LATEST_TAG}, Version: ${REMOTE_VERSION}"
+            echo "No prefix to remove. Version is ${REMOTE_VERSION}"
           fi
           
           echo "REMOTE_VERSION=$REMOTE_VERSION" >> $GITHUB_ENV
@@ -49,11 +65,15 @@ jobs:
       - name: Get local spec version
         id: get_local_version
         run: |
+          if [[ ! -f "${{ env.SPEC_FILE }}" ]]; then
+            echo "::error::Spec file not found at ${{ env.SPEC_FILE }}"
+            exit 1
+          fi
+
           LOCAL_VERSION=$(awk -F ': ' '/^Version:/ {print $2}' ${{ env.SPEC_FILE }})
 
-          # --- IMPROVEMENT: Validate the local version format ---
           if ! [[ "$LOCAL_VERSION" =~ ^[0-9] ]]; then
-            echo "::error::Invalid local version found in ${{ env.SPEC_FILE }}: '$LOCAL_VERSION'. Version must start with a digit."
+            echo "::error::Invalid local version in ${{ env.SPEC_FILE }}: '$LOCAL_VERSION'. Version must start with a digit."
             exit 1
           fi
 
