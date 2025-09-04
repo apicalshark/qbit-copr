@@ -2,107 +2,26 @@ name: Update Spec Version
 
 on:
   schedule:
+    # Runs every Monday at midnight UTC
     - cron: '0 0 * * 1'
-  workflow_dispatch:
+  workflow_dispatch: # Allows manual triggering
 
+# Grant the workflow permissions to push commits
 permissions:
   contents: write
-  packages: write
 
 jobs:
   check_and_update:
     runs-on: ubuntu-latest
-    env:
-      # --- CONFIGURATION: Set these for your target repository ---
-      # The repository to check for new releases (e.g., "linuxmint/webapp-manager")
-      TARGET_REPO: "c0re100/qBittorrent-Enhanced-Edition"
-      # The path to your RPM spec file.
-      SPEC_FILE: "qBittorrent-Enhanced-Edition.specc"
-      # Optional prefix to remove from the git tag (e.g., "v" for tags like "v1.2.3").
-      TAG_PREFIX: "release-"
-
     steps:
+      # Step 1: Check out your repository's code
       - name: Checkout local repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Get latest release tag from GitHub
-        id: get_remote_tag
-        run: |
-          echo "Fetching all tags from ${{ env.TARGET_REPO }}..."
-          LATEST_TAG=$( \
-            # 1. Fetch all tags from the correct API endpoint
-            curl -s "https://api.github.com/repos/${{ env.TARGET_REPO }}/tags" | \
-            # 2. Extract just the tag name from each object
-            jq -r '.[].name' | \
-            # 3. Filter for tags that look like version numbers
-            grep -E '^[0-9]+(\.[0-9]+)*$' | \
-            # 4. IMPORTANT: Sort the results using version logic (e.g., 1.10 > 1.9)
-            sort -V | \
-            # 5. Take the last line, which is now the highest version
-            tail -n 1 \
-          )
-
-          # Validate that a tag was found
-          if [[ -z "$LATEST_TAG" ]]; then
-            echo "::error::Could not find a valid numerical tag for ${{ env.TARGET_REPO }} using the /tags endpoint."
-            exit 1
-          fi
-          echo "Latest valid tag found: $LATEST_TAG"
-
-          # Remove prefix from tag to get the clean version number
-          REMOTE_VERSION="$LATEST_TAG"
-          TAG_PREFIX="${{ env.TAG_PREFIX }}"
-          if [[ -n "$TAG_PREFIX" && "$LATEST_TAG" == "$TAG_PREFIX"* ]]; then
-            REMOTE_VERSION="${LATEST_TAG#"$TAG_PREFIX"}"
-            echo "Removed prefix '${TAG_PREFIX}'. Full tag: ${LATEST_TAG}, Version: ${REMOTE_VERSION}"
-          else
-            echo "No prefix to remove. Version is ${REMOTE_VERSION}"
-          fi
-          
-          echo "REMOTE_VERSION=$REMOTE_VERSION" >> $GITHUB_ENV
-          echo "remote_version=$REMOTE_VERSION" >> $GITHUB_OUTPUT
-
-      - name: Get local spec version
-        id: get_local_version
-        run: |
-          if [[ ! -f "${{ env.SPEC_FILE }}" ]]; then
-            echo "::error::Spec file not found at ${{ env.SPEC_FILE }}"
-            exit 1
-          fi
-
-          LOCAL_VERSION=$(awk -F ': ' '/^Version:/ {print $2}' ${{ env.SPEC_FILE }})
-
-          if ! [[ "$LOCAL_VERSION" =~ ^[0-9] ]]; then
-            echo "::error::Invalid local version in ${{ env.SPEC_FILE }}: '$LOCAL_VERSION'. Version must start with a digit."
-            exit 1
-          fi
-
-          echo "LOCAL_VERSION=$LOCAL_VERSION" >> $GITHUB_ENV
-          echo "local_version=$LOCAL_VERSION" >> $GITHUB_OUTPUT
-
-      - name: Compare versions and update spec file
-        id: compare_versions
-        run: |
-          REMOTE_VERSION="${{ steps.get_remote_tag.outputs.remote_version }}"
-          LOCAL_VERSION="${{ steps.get_local_version.outputs.local_version }}"
-
-          echo "Remote Version ($REMOTE_VERSION) vs. Local Version ($LOCAL_VERSION)"
-
-          if dpkg --compare-versions "$REMOTE_VERSION" "gt" "$LOCAL_VERSION"; then
-            echo "Remote version is newer. Updating spec file..."
-            sed -i "s/^Version: *${LOCAL_VERSION}$/Version: ${REMOTE_VERSION}/" ${{ env.SPEC_FILE }}
-            echo "updated_spec=true" >> $GITHUB_OUTPUT
-          else
-            echo "Local version is up-to-date or newer. No update needed."
-            echo "updated_spec=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Commit and Push Changes
-        if: steps.compare_versions.outputs.updated_spec == 'true'
-        run: |
-          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          
-          git add ${{ env.SPEC_FILE }}
-          git commit -m "chore: Update ${{ env.SPEC_FILE }} to version ${{ env.REMOTE_VERSION }}"
-          git push
+      # Step 2: Run the updater action
+      - name: Check for updates and update spec file
+        uses: apicalshark/rpm-spec-version-updater@v1
+        with:
+          target-repo: 'c0re100/qBittorrent-Enhanced-Edition'
+          spec-file: 'qBittorrent-Enhanced-Edition.spec'
+          tag-prefix: 'release-'
