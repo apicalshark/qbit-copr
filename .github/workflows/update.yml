@@ -20,7 +20,7 @@ jobs:
 
       # Step 2: Run the updater action
       - name: Check for updates and update spec file
-        uses: apicalshark/rpm-spec-version-updater@v1
+        uses: apicalshark/rpm-spec-version-updater@v1.2
         with:
           target-repo: 'c0re100/qBittorrent-Enhanced-Edition'
           spec-file: 'qBittorrent-Enhanced-Edition.spec'
