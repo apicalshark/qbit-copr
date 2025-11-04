@@ -2,7 +2,7 @@ Name:    qBittorrent-Enhanced-Edition
 Summary: qBittorrent Enhanced, based on qBittorrent 
 Epoch:   1
 Version: 5.1.2.10
-Release: 1
+Release: 2
 License: GPL-2.0-or-later
 URL:     https://github.com/c0re100/qBittorrent-Enhanced-Edition
 
