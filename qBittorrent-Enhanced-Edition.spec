@@ -1,8 +1,8 @@
 Name:    qBittorrent-Enhanced-Edition
 Summary: qBittorrent Enhanced, based on qBittorrent 
 Epoch:   1
-Version: 5.1.3.10
-Release: 3
+Version: 5.2.1.10
+Release: 1
 License: GPL-2.0-or-later
 URL:     https://github.com/c0re100/qBittorrent-Enhanced-Edition
 
@@ -91,12 +91,14 @@ desktop-file-install \
   %{buildroot}%{_datadir}/applications/org.qbittorrent.qBittorrent.desktop
 
 appstream-util validate-relax --nonet %{buildroot}%{_metainfodir}/org.qbittorrent.qBittorrent.metainfo.xml
+appstream-util validate-relax --nonet %{buildroot}%{_metainfodir}/org.qbittorrent.qBittorrent-nox.metainfo.xml
 
 %files
 %license COPYING
 %doc README.md AUTHORS Changelog
 %{_bindir}/qbittorrent
 %{_metainfodir}/org.qbittorrent.qBittorrent.metainfo.xml
+%{_metainfodir}/org.qbittorrent.qBittorrent-nox.metainfo.xml
 %{_datadir}/applications/org.qbittorrent.qBittorrent.desktop
 %{_datadir}/icons/hicolor/*/apps/qbittorrent.*
 %{_datadir}/icons/hicolor/*/status/qbittorrent-tray*
